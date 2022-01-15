@@ -1,0 +1,19 @@
+{
+  "name": "google-photo-uploader",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/viveloper/google-photo-uploader.git",
+  "author": "viveloper <ucsik1234@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "devDependencies": {
+    "@googleapis/docs": "^0.2.0",
+    "axios": "^0.24.0",
+    "dotenv": "^12.0.3",
+    "googleapis": "^92.0.0",
+    "open": "^8.4.0",
+    "server-destroy": "^1.0.1"
+  }
+}
