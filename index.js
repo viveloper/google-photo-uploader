@@ -5,6 +5,7 @@ const url = require('url');
 const open = require('open');
 const destroyer = require('server-destroy');
 const axios = require('axios');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -14,13 +15,43 @@ async function main() {
   const oAuth2Client = await getAuthenticatedClient();
   const { access_token } = oAuth2Client.credentials;
   console.log(access_token);
-  axios
-    .get('https://photoslibrary.googleapis.com/v1/albums', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    })
-    .then(function (response) {
-      console.log(response.data.albums);
-    });
+
+  const { data: uploadToken } = await axios.post(
+    'https://photoslibrary.googleapis.com/v1/uploads',
+    fs.createReadStream(
+      '/Users/viveloper/Desktop/projects/google-photo-uploader/score.png'
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        'Content-Type': 'application/octet-stream',
+        'X-Goog-Upload-Content-Type': 'image/png',
+        'X-Goog-Upload-Protocol': 'raw',
+      },
+    }
+  );
+
+  const itemCreationResponse = await axios.post(
+    'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
+    {
+      newMediaItems: [
+        {
+          description: 'item-description',
+          simpleMediaItem: {
+            fileName: 'score.png',
+            uploadToken,
+          },
+        },
+      ],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  console.log(itemCreationResponse.data.newMediaItemResults[0].status);
 }
 
 function getAuthenticatedClient() {
@@ -31,10 +62,7 @@ function getAuthenticatedClient() {
       process.env.REDIRECT_URL
     );
 
-    const scopes = [
-      'https://www.googleapis.com/auth/photoslibrary.readonly',
-      'https://www.googleapis.com/auth/photoslibrary.appendonly',
-    ];
+    const scopes = ['https://www.googleapis.com/auth/photoslibrary'];
 
     const authorizeUrl = oAuth2Client.generateAuthUrl({
       // 'online' (default) or 'offline' (gets refresh_token)
