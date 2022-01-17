@@ -5,22 +5,79 @@ const url = require('url');
 const open = require('open');
 const destroyer = require('server-destroy');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const mime = require('mime-types');
 
 dotenv.config();
 
 // https://github.com/googleapis/google-api-nodejs-client
 
 async function main() {
+  // auth
   const oAuth2Client = await getAuthenticatedClient();
   const { access_token } = oAuth2Client.credentials;
   console.log(access_token);
-  axios
-    .get('https://photoslibrary.googleapis.com/v1/albums', {
-      headers: { Authorization: `Bearer ${access_token}` },
-    })
-    .then(function (response) {
-      console.log(response.data.albums);
-    });
+
+  const rootDir = '/Users/viveloper/Desktop/test';
+  dfs(rootDir);
+
+  async function dfs(dir) {
+    const fileList = fs.readdirSync(dir);
+    // sync upload
+    for (let i = 0; i < fileList.length; i++) {
+      const fileName = fileList[i];
+      const filePath = path.resolve(dir, fileName);
+      const stat = fs.statSync(filePath);
+      if (stat.isDirectory()) {
+        dfs(filePath);
+      } else {
+        const ext = path.parse(fileName).ext;
+        const mimeType = mime.lookup(fileName);
+
+        if (ext && mimeType) {
+          // uploadsFile
+          const uploadToken = await uploadFile({
+            filePath,
+            mimeType: mime.lookup(fileName),
+            accessToken: access_token,
+          });
+          // createMediaItem
+          await createMediaItem({
+            uploadToken,
+            fileName,
+            accessToken: access_token,
+          });
+        }
+      }
+    }
+    // // async upload
+    // fileList.forEach(async (fileName) => {
+    //   const filePath = path.resolve(dir, fileName);
+    //   const stat = fs.statSync(filePath);
+    //   if (stat.isDirectory()) {
+    //     dfs(filePath);
+    //   } else {
+    //     const ext = path.parse(fileName).ext;
+    //     const mimeType = mime.lookup(fileName);
+
+    //     if (ext && mimeType) {
+    //       // uploadsFile
+    //       const uploadToken = await uploadFile({
+    //         filePath,
+    //         mimeType: mime.lookup(fileName),
+    //         accessToken: access_token,
+    //       });
+    //       // createMediaItem
+    //       await createMediaItem({
+    //         uploadToken,
+    //         fileName,
+    //         accessToken: access_token,
+    //       });
+    //     }
+    //   }
+    // });
+  }
 }
 
 function getAuthenticatedClient() {
@@ -31,10 +88,7 @@ function getAuthenticatedClient() {
       process.env.REDIRECT_URL
     );
 
-    const scopes = [
-      'https://www.googleapis.com/auth/photoslibrary.readonly',
-      'https://www.googleapis.com/auth/photoslibrary.appendonly',
-    ];
+    const scopes = ['https://www.googleapis.com/auth/photoslibrary'];
 
     const authorizeUrl = oAuth2Client.generateAuthUrl({
       // 'online' (default) or 'offline' (gets refresh_token)
@@ -75,6 +129,53 @@ function getAuthenticatedClient() {
       });
     destroyer(server);
   });
+}
+
+async function uploadFile({ filePath, mimeType, accessToken }) {
+  const { data: uploadToken } = await axios.post(
+    'https://photoslibrary.googleapis.com/v1/uploads',
+    fs.createReadStream(filePath),
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/octet-stream',
+        'X-Goog-Upload-Content-Type': mimeType,
+        'X-Goog-Upload-Protocol': 'raw',
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    }
+  );
+  console.log('uploadFile:', filePath);
+  return uploadToken;
+}
+
+async function createMediaItem({ uploadToken, fileName, accessToken }) {
+  const itemCreationResponse = await axios.post(
+    'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
+    {
+      newMediaItems: [
+        {
+          description: 'item-description',
+          simpleMediaItem: {
+            fileName,
+            uploadToken,
+          },
+        },
+      ],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  console.log(
+    'createMediaItem:',
+    fileName,
+    itemCreationResponse.data.newMediaItemResults[0].status
+  );
 }
 
 main();

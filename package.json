@@ -13,6 +13,7 @@
     "axios": "^0.24.0",
     "dotenv": "^12.0.3",
     "googleapis": "^92.0.0",
+    "mime-types": "^2.1.34",
     "open": "^8.4.0",
     "server-destroy": "^1.0.1"
   }
