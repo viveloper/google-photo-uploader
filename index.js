@@ -13,13 +13,15 @@ dotenv.config();
 
 // https://github.com/googleapis/google-api-nodejs-client
 
+const rootDir = '/Users/viveloper/Desktop/test';
+const logFilePath = './completedFiles.json';
+
 async function main() {
   // auth
   const oAuth2Client = await getAuthenticatedClient();
   const { access_token } = oAuth2Client.credentials;
-  console.log(access_token);
+  const completedFilesMap = loadCompletedFiles();
 
-  const rootDir = '/Users/viveloper/Desktop/test';
   dfs(rootDir);
 
   async function dfs(dir) {
@@ -34,49 +36,31 @@ async function main() {
       } else {
         const ext = path.parse(fileName).ext;
         const mimeType = mime.lookup(fileName);
-
-        if (ext && mimeType) {
-          // uploadsFile
-          const uploadToken = await uploadFile({
-            filePath,
-            mimeType: mime.lookup(fileName),
-            accessToken: access_token,
-          });
-          // createMediaItem
-          await createMediaItem({
-            uploadToken,
-            fileName,
-            accessToken: access_token,
-          });
+        if (ext && mimeType && !completedFilesMap[filePath]) {
+          try {
+            // uploadsFile
+            const uploadToken = await uploadFile({
+              filePath,
+              mimeType,
+              accessToken: access_token,
+            });
+            // createMediaItem
+            await createMediaItem({
+              uploadToken,
+              fileName,
+              accessToken: access_token,
+            });
+            completedFilesMap[filePath] = true;
+          } catch (error) {
+            console.log(error);
+            saveCompletedFiles();
+            console.log(`saved ${logFilePath}`);
+          }
+        } else {
+          console.log(`skip file : ${filePath}`);
         }
       }
     }
-    // // async upload
-    // fileList.forEach(async (fileName) => {
-    //   const filePath = path.resolve(dir, fileName);
-    //   const stat = fs.statSync(filePath);
-    //   if (stat.isDirectory()) {
-    //     dfs(filePath);
-    //   } else {
-    //     const ext = path.parse(fileName).ext;
-    //     const mimeType = mime.lookup(fileName);
-
-    //     if (ext && mimeType) {
-    //       // uploadsFile
-    //       const uploadToken = await uploadFile({
-    //         filePath,
-    //         mimeType: mime.lookup(fileName),
-    //         accessToken: access_token,
-    //       });
-    //       // createMediaItem
-    //       await createMediaItem({
-    //         uploadToken,
-    //         fileName,
-    //         accessToken: access_token,
-    //       });
-    //     }
-    //   }
-    // });
   }
 }
 
@@ -176,6 +160,19 @@ async function createMediaItem({ uploadToken, fileName, accessToken }) {
     fileName,
     itemCreationResponse.data.newMediaItemResults[0].status
   );
+}
+
+function saveCompletedFiles() {
+  fs.writeFileSync(logFilePath, JSON.stringify(completedFilesMap));
+}
+
+function loadCompletedFiles() {
+  let completedFilesMap = {};
+  if (fs.existsSync(logFilePath)) {
+    const dataBuffer = fs.readFileSync(logFilePath);
+    completedFilesMap = JSON.parse(dataBuffer.toString());
+  }
+  return completedFilesMap;
 }
 
 main();
